@@ -57,7 +57,7 @@ public class LoginFrame extends JFrame {
 
     private void aksiLogin() {
         String user = txtUsername.getText().trim();
-        String pass = new String(txtPassword.getPassword()).trim();
+        String pass = new String(txtPassword.getPassword());
 
         if (user.isEmpty() || pass.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Username dan password wajib diisi!");
@@ -104,7 +104,7 @@ public class LoginFrame extends JFrame {
             String nama = txtNama.getText().trim();
             String kontak = txtKontak.getText().trim();
             String user = txtUserBaru.getText().trim();
-            String pass = new String(txtPassBaru.getPassword()).trim();
+            String pass = new String(txtPassBaru.getPassword());
 
             if (nama.isEmpty() || kontak.isEmpty() || user.isEmpty() || pass.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Semua kolom wajib diisi!");
