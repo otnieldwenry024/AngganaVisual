@@ -4,6 +4,7 @@ import model.DetailPesanan;
 import model.Klien;
 import model.Pembayaran;
 import model.Pesanan;
+import security.Passwords;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -13,31 +14,29 @@ public class PesananDAO {
 
     // Cek login Admin -> kembalikan nama lengkap jika cocok
     public String loginAdmin(String username, String password) {
-        String sql = "SELECT nama_lengkap FROM admin WHERE username = ? AND password = ?";
+        String sql = "SELECT id_admin, nama_lengkap, password FROM admin WHERE username = ?";
         try (Connection conn = KoneksiDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
-            ps.setString(2, password);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
+                if (rs.next() && Passwords.verify(password, rs.getString("password"))) {
                     return rs.getString("nama_lengkap");
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return null;
     }
 
     // Cek login Pemesan/Klien -> kembalikan objek Klien jika cocok
     public Klien loginKlien(String username, String password) {
-        String sql = "SELECT id_klien, nama_klien, kontak, username FROM klien WHERE username = ? AND password = ?";
+        String sql = "SELECT id_klien, nama_klien, kontak, username, password FROM klien WHERE username = ?";
         try (Connection conn = KoneksiDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
-            ps.setString(2, password);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
+                if (rs.next() && Passwords.verify(password, rs.getString("password"))) {
                     return new Klien(
                             rs.getString("id_klien"),
                             rs.getString("nama_klien"),
@@ -47,18 +46,19 @@ public class PesananDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return null;
     }
 
-    // Daftar akun pemesan baru (auto-increment K-003, K-004, dst.)
+    // Akun baru memakai ID acak dan password hash.
     public String daftarKlienBaru(String namaKlien, String kontak, String username, String password) {
-        String cekSql = "SELECT COUNT(*) FROM klien WHERE username = ?";
+        String cekSql = "SELECT (SELECT COUNT(*) FROM klien WHERE username = ?) + (SELECT COUNT(*) FROM admin WHERE username = ?)";
         String insertSql = "INSERT INTO klien (id_klien, nama_klien, kontak, username, password) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = KoneksiDB.getConnection()) {
             try (PreparedStatement psCek = conn.prepareStatement(cekSql)) {
                 psCek.setString(1, username);
+                psCek.setString(2, username);
                 try (ResultSet rs = psCek.executeQuery()) {
                     if (rs.next() && rs.getInt(1) > 0) {
                         return "DUPLICATE";
@@ -72,13 +72,13 @@ public class PesananDAO {
                 ps.setString(2, namaKlien);
                 ps.setString(3, kontak);
                 ps.setString(4, username);
-                ps.setString(5, password);
+                ps.setString(5, Passwords.hash(password));
                 if (ps.executeUpdate() > 0) {
                     return idBaru;
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return null;
     }
@@ -93,7 +93,7 @@ public class PesananDAO {
                 list.add(rs.getString("id_klien") + " - " + rs.getString("nama_klien"));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return list;
     }
@@ -108,25 +108,13 @@ public class PesananDAO {
                 list.add(rs.getString("id_layanan") + " - " + rs.getString("nama_layanan"));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return list;
     }
 
     private String generateIdKlienBaru(Connection conn) throws SQLException {
-        int max = 0;
-        String sql = "SELECT id_klien FROM klien";
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                String id = rs.getString("id_klien");
-                try {
-                    int angka = Integer.parseInt(id.replaceAll("[^0-9]", ""));
-                    if (angka > max) max = angka;
-                } catch (NumberFormatException ignored) {}
-            }
-        }
-        return String.format("K-%03d", max + 1);
+        return "K-" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 18);
     }
 
     public String tambahKlienBaru(String namaKlien, String kontak) {
@@ -142,7 +130,7 @@ public class PesananDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return null;
     }
@@ -175,12 +163,10 @@ public class PesananDAO {
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
-                e.printStackTrace();
-                return false;
+                throw new IllegalStateException("Operasi database gagal.", e);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
     }
 
@@ -197,7 +183,7 @@ public class PesananDAO {
                 list.add(p);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return list;
     }
@@ -217,7 +203,7 @@ public class PesananDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
         return list;
     }
@@ -282,8 +268,7 @@ public class PesananDAO {
             ps.setString(2, idPesanan);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
     }
 
@@ -298,8 +283,7 @@ public class PesananDAO {
             ps.setString(5, bayar.getMetodePembayaran());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
     }
 
@@ -311,8 +295,7 @@ public class PesananDAO {
             ps.setString(2, idPesanan);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+            throw new IllegalStateException("Operasi database gagal.", e);
         }
     }
 }
